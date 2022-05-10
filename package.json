@@ -89,5 +89,9 @@
     "ts-node": "^10.0.0",
     "typechain": "^5.0.0",
     "typescript": "^4.3.0"
+  },
+  "dependencies": {
+    "@ensdomains/ens-contracts": "^0.0.11",
+    "@openzeppelin/contracts": "^4.6.0"
   }
 }
