@@ -36,9 +36,9 @@ contract SubdomainsRegistry {
     bytes32 public immutable node;
     address public immutable resolver;
 
-    mapping(address => Deposit) public deposits;
+    mapping(address => Registration) public registrations;
 
-    struct Deposit {
+    struct Registration {
         uint64 deadline;
         bool paid;
         bool withdrawn;
@@ -61,6 +61,8 @@ contract SubdomainsRegistry {
     }
 
     function register(string memory domain, address to) external {
+        require(registrations[msg.sender].deadline == 0, "LEVX: ONE_DOMAIN_ALLOWED");
+
         uint256 length = bytes(domain).length;
         require(length >= 3, "LEVX: DOMAIN_TOO_SHORT");
 
@@ -74,8 +76,8 @@ contract SubdomainsRegistry {
         ENS(ens).setSubnodeOwner(node, label, to);
 
         bool paid = length <= 7;
-        deposits[msg.sender].deadline = uint64(block.timestamp + 2 weeks);
-        deposits[msg.sender].paid = paid;
+        registrations[msg.sender].deadline = uint64(block.timestamp + 2 weeks);
+        registrations[msg.sender].paid = paid;
         emit Register(label, to, paid);
         if (paid) {
             IERC20(token).safeTransferFrom(msg.sender, address(this), 1e18);
@@ -83,14 +85,18 @@ contract SubdomainsRegistry {
     }
 
     function withdraw(address to) external {
-        Deposit storage deposit = deposits[msg.sender];
-        (uint64 deadline, bool paid, bool withdrawn) = (deposit.deadline, deposit.paid, deposit.withdrawn);
+        Registration storage registration = registrations[msg.sender];
+        (uint64 deadline, bool paid, bool withdrawn) = (
+            registration.deadline,
+            registration.paid,
+            registration.withdrawn
+        );
         require(paid, "LEVX: NON_PAID");
         require(deadline > 0, "LEVX: NON_EXISTENT");
         require(deadline <= block.timestamp, "LEVX: TOO_EARLY");
         require(!withdrawn, "LEVX: WITHDRAWN");
 
-        deposit.withdrawn = true;
+        registration.withdrawn = true;
         emit Withdraw(to);
         IERC20(token).safeTransfer(to, 1e18);
     }
