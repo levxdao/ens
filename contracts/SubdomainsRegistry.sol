@@ -35,31 +35,31 @@ contract SubdomainsRegistry {
     address public immutable ens;
     bytes32 public immutable node;
     address public immutable resolver;
-    uint256 public immutable deadline;
 
-    mapping(address => uint256) public amountLocked;
+    mapping(address => mapping(bytes32 => Deposit)) public deposits;
 
-    event Register(string indexed domain, address indexed to);
-    event Withdraw(uint256 amount, address indexed to);
+    struct Deposit {
+        uint64 deadline;
+        bool withdrawn;
+    }
+
+    event Register(bytes32 indexed label, address indexed to, bool indexed paid);
+    event Withdraw(bytes32 indexed label, address indexed to);
 
     constructor(
         address _token,
         address _ens,
         bytes32 _node,
-        address _resolver,
-        uint256 _deadline
+        address _resolver
     ) {
         owner = msg.sender;
         token = _token;
         ens = _ens;
         node = _node;
         resolver = _resolver;
-        deadline = _deadline;
     }
 
     function register(string memory domain, address to) external {
-        require(block.timestamp < deadline, "LEVX: EXPIRED");
-
         uint256 length = bytes(domain).length;
         require(length >= 3, "LEVX: DOMAIN_TOO_SHORT");
 
@@ -72,27 +72,23 @@ contract SubdomainsRegistry {
         PublicResolver(resolver).setAddr(subnode, to);
         ENS(ens).setSubnodeOwner(node, label, to);
 
-        uint256 amount;
-        if (length == 3) {
-            amount = 10e18;
-        } else if (length == 4) {
-            amount = 333e16;
-        } else if (length <= 7) {
-            amount = 1e18;
-        }
-        emit Register(domain, to);
-        if (amount > 0) {
-            amountLocked[msg.sender] += amount;
-            IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        bool paid = length <= 7;
+        emit Register(label, to, paid);
+        if (paid) {
+            deposits[msg.sender][label].deadline = uint64(block.timestamp + 2 weeks);
+            IERC20(token).safeTransferFrom(msg.sender, address(this), 1e18);
         }
     }
 
-    function withdraw() external {
-        require(block.timestamp >= deadline, "LEVX: TOO_EARLY");
+    function withdraw(bytes32 label, address to) external {
+        Deposit storage deposit = deposits[msg.sender][label];
+        (uint64 deadline, bool withdrawn) = (deposit.deadline, deposit.withdrawn);
+        require(deadline > 0, "LEVX: NON_EXISTENT");
+        require(deadline <= block.timestamp, "LEVX: TOO_EARLY");
+        require(!withdrawn, "LEVX: WITHDRAWN");
 
-        uint256 amount = amountLocked[msg.sender];
-        require(amount > 0, "LEVX: NOTHING_TO_WITHDRAW");
-        emit Withdraw(amount, msg.sender);
-        IERC20(token).safeTransfer(msg.sender, amount);
+        deposit.withdrawn = true;
+        emit Withdraw(label, to);
+        IERC20(token).safeTransfer(to, 1e18);
     }
 }
