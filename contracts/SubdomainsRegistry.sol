@@ -44,7 +44,7 @@ contract SubdomainsRegistry {
         bool withdrawn;
     }
 
-    event Register(bytes32 indexed label, address indexed to, bool indexed paid);
+    event Register(string domain, bytes32 indexed label, address indexed to, bool indexed paid);
     event Withdraw(address indexed to);
 
     constructor(
@@ -76,9 +76,8 @@ contract SubdomainsRegistry {
         ENS(ens).setSubnodeOwner(node, label, to);
 
         bool paid = length <= 7;
-        registrations[msg.sender].deadline = uint64(block.timestamp + 2 weeks);
-        registrations[msg.sender].paid = paid;
-        emit Register(label, to, paid);
+        registrations[msg.sender] = Registration(uint64(block.timestamp + 2 weeks), paid, false);
+        emit Register(domain, label, to, paid);
         if (paid) {
             IERC20(token).safeTransferFrom(msg.sender, address(this), 1e18);
         }
